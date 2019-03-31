@@ -8,7 +8,7 @@ void isrBitEnd() {
 */
 
 CEC_Electrical::CEC_Electrical(RemoteDebug &_debug): 
-	SerialLine(_debug)
+	RecvCecBuffer(_debug)
 ,	Debug(_debug)
 // , isrPos(0)
 // , isrStartBitPos(-1)
@@ -35,6 +35,11 @@ void CEC_Electrical::SetAddress(int address)
 	_address = address & 0x0f;
 }
 */
+bool CEC_Electrical::TransmitFrame(SendCecBuffer &sbuf) {
+	DEBUG_D("len:%d\n", sbuf._sendBufferPos);
+	CECPacket cecPacket(sbuf._sendBuffer, sbuf._sendBufferPos, Debug);
+	cecPacket.dump("T");	
+}
 
 bool CEC_Electrical::Raise()
 {
@@ -191,7 +196,7 @@ unsigned long CEC_Electrical::processISR(HdmiBit &isr) {
 	}
 	_lastLineState = currentLineState;
 	*/
-
+RESTART:
 	switch (_primaryState) {
 	case CEC_IDLE:
 		// We're waiting for the rising edge of the start bit
@@ -264,8 +269,9 @@ unsigned long CEC_Electrical::processISR(HdmiBit &isr) {
 			// Illegal state.  Go back to CEC_IDLE to wait for a valid
 			// start bit
 			// waitTime = LineError("CEC_RCV_DATABIT", difftime);
-			DEBUG_D("3: %d %d\n", currentLineState, difftime);
-			ResetState();
+			_secondaryState = CEC_RCV_STARTBIT1;
+			// DEBUG_D("3: %d %d\n", currentLineState, difftime);
+			goto RESTART;
 			break;
 
 		case CEC_RCV_DATABIT2:

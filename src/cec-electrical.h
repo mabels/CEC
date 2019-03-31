@@ -4,6 +4,7 @@
 #include <Ticker.h>
 
 #include "serial-line.h"
+#include "cec-packet.h"
 #include <RemoteDebug.h>
 
 #include "hdmi-bit.h"
@@ -11,7 +12,7 @@
 #define CEC_MAX_RETRANSMIT 5
 const int CEC_ISR_RING_SIZE  = 18;
 
-class CEC_Electrical : public SerialLine {
+class CEC_Electrical : public RecvCecBuffer {
 public:
 	CEC_Electrical(RemoteDebug &debug);
 	void Initialize();
@@ -19,6 +20,7 @@ public:
 
 	unsigned long Process();
 	bool TransmitPending() { return _primaryState == CEC_TRANSMIT && _secondaryState == CEC_IDLE_WAIT; }
+	virtual bool TransmitFrame(SendCecBuffer &sbuf);
 
 	void bitEndISR();
 

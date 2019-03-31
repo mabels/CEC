@@ -51,8 +51,8 @@ class MyCEC: public CEC_Device {
     // TODO: implement menu status query (0x8D) and report (0x8E,0x00)
     */ 
     void OnCECPacket(CECPacket &cecPacket) {
-      cecPacket.dump();
-      pulseAudioShim->sendCecFrame(cecPacket);
+      cecPacket.dump("F");
+      // pulseAudioShim->sendCecFrame(cecPacket);
       /*
       PulseBuffer my;
       //my.append(source);
@@ -109,7 +109,7 @@ void setup()
   // Serial.println(WiFi.localIP());
   Cec.begin(IN_LINE, OUT_LINE);
   // device.setPulseAudioShim(&pulseAudioShim);
-  PulseAudio.begin();
+  PulseAudio.begin(&Cec);
   
   // device.MonitorMode = true;
   // device.Promiscuous = true;
@@ -127,11 +127,5 @@ void loop()
   Cec.Handle();
   PulseAudio.Handle();
   
-  //digitalWrite(OUT_LINE, o++%2 ? LOW:HIGH);
-  // delay(100);
-  while (Serial.available()) {
-    unsigned int c = Serial.read();
-    // Serial.println("c");
-    PulseAudio.addPacket(c);
-  }
+
 }

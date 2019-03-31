@@ -24,7 +24,7 @@ class CECPacket {
 		buf[i - 1] = buffer[i].data & 0xff;
 	}
 */
-    void dump() {
+    void dump(const char *prefix) {
         char buf[6 + (count * sizeof(" %02d:A"))];
         strcpy(buf, "");
         char *sep = "";
@@ -40,7 +40,7 @@ class CECPacket {
                 ? buffer[i].data() : '.');
         }
         if (count > 0) {
-            DEBUG_D("F%c[%s]\n", buffer[0].ack() ? '>' : '<', buf);
+            DEBUG_V("%s%c[%s]\n", prefix, buffer[0].ack() ? '>' : '<', buf);
         }
     }
 };

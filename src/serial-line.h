@@ -45,13 +45,68 @@ public:
 	bool ack() {
 		return _data & (1 << 9);
 	}
+
+	void setData(unsigned char data) {
+		_data &= ~0xff;
+		_data |= data;
+	}
+
+	void setAck(bool val) {
+		_data &= ~(1 << 9);
+		_data |= ((val ? 1: 0) << 9);
+	}
+
+	void setEom(bool val) {
+		_data &= ~(1 << 8);
+		_data |= ((val ? 1: 0) << 8);
+	}
 };
 
-class SerialLine {
+class SendCecBuffer {
+private:
+	RemoteDebug &Debug;
+
+public:
+	bool ack;
+	SerialByte _sendBuffer[SERIAL_BUFFER_SIZE];
+	int _sendBufferPos;
+
+	SendCecBuffer(RemoteDebug &debug): 
+		Debug(debug)
+		, ack(false)
+		, _sendBufferPos(0) {
+
+	};
+
+	void append(unsigned char *c, int start, int end, bool eom = false) {
+		for (int i = start; i < end; ++i) {
+			/*
+			if (c[i] == MSG_ESC) {
+				DEBUG_E("ESC is not implemented");
+			}
+			*/
+			_sendBuffer[_sendBufferPos].setData(c[i]);
+			_sendBuffer[_sendBufferPos].setAck(ack);
+			if (i + 1 == start) {
+				_sendBuffer[_sendBufferPos].setEom(eom);
+			}
+			++_sendBufferPos;
+		}
+	}
+
+	void reset() {
+		ack = false;
+		_sendBufferPos = 0;
+		DEBUG_D("\n");
+	}
+
+};
+
+class RecvCecBuffer {
 private:
 	RemoteDebug &Debug;
 public:
-	SerialLine(RemoteDebug &debug);
+	RecvCecBuffer(RemoteDebug &debug);
 /*
 	void ClearTransmitBuffer();
 	virtual bool Transmit(const unsigned char* buffer, int count);

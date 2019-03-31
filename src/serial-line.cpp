@@ -1,7 +1,7 @@
 
 #include "serial-line.h"
 
-SerialLine::SerialLine(RemoteDebug &debug): Debug(debug)
+RecvCecBuffer::RecvCecBuffer(RemoteDebug &debug): Debug(debug)
 {
 	// _transmitBufferCount = 0;
 	// _transmitBufferBit = 7;
@@ -12,19 +12,19 @@ SerialLine::SerialLine(RemoteDebug &debug): Debug(debug)
 }
 
 	/*
-void SerialLine::OnReceiveComplete(SerialByte *buffer, int count)
+void RecvCecBuffer::OnReceiveComplete(SerialByte *buffer, int count)
 {
 	ResetReceiveBuffer();
 }
 
-void SerialLine::ClearTransmitBuffer()
+void RecvCecBuffer::ClearTransmitBuffer()
 {
 	_transmitBufferCount = 0;
 	_transmitBufferBit = 7;
 	_transmitBufferByte = 0;
 }
 
-bool SerialLine::Transmit(const unsigned char* buffer, int count)
+bool RecvCecBuffer::Transmit(const unsigned char* buffer, int count)
 {
 	if (!TransmitPartial(buffer, count))
 		return false;
@@ -33,7 +33,7 @@ bool SerialLine::Transmit(const unsigned char* buffer, int count)
 	return true;
 }
 
-bool SerialLine::TransmitPartial(const unsigned char* buffer, int count)
+bool RecvCecBuffer::TransmitPartial(const unsigned char* buffer, int count)
 {
 	if (count < 0 || count >= (SERIAL_BUFFER_SIZE - _transmitBufferCount))
 		return false;
@@ -46,7 +46,7 @@ bool SerialLine::TransmitPartial(const unsigned char* buffer, int count)
 	return true;
 }
 
-int SerialLine::PopTransmitBit()
+int RecvCecBuffer::PopTransmitBit()
 {
 	if (_transmitBufferByte == _transmitBufferCount)
 		return 0;
@@ -60,18 +60,18 @@ int SerialLine::PopTransmitBit()
 	return bit;
 }
 
-int SerialLine::RemainingTransmitBytes()
+int RecvCecBuffer::RemainingTransmitBytes()
 {
 	return _transmitBufferCount - _transmitBufferByte;
 }
 
-int SerialLine::TransmitSize()
+int RecvCecBuffer::TransmitSize()
 {
 	return _transmitBufferCount;
 }
 	*/
 
-SerialByte *SerialLine::PushReceiveBit(int val) {
+SerialByte *RecvCecBuffer::PushReceiveBit(int val) {
 	SerialByte *complete = _receiveBuffer[_receiveBufferPos].push(val);
 	if (complete->complete()) {
 		/*
@@ -82,7 +82,7 @@ SerialByte *SerialLine::PushReceiveBit(int val) {
 		*/
 		_receiveBufferPos++;
 		if (_receiveBufferPos >= SERIAL_BUFFER_SIZE) {
-			DEBUG_E("SerialLine wrap recv buffer");
+			DEBUG_E("RecvCecBuffer wrap recv buffer");
 			ResetReceiveBuffer();
 		}
 	}
@@ -90,13 +90,13 @@ SerialByte *SerialLine::PushReceiveBit(int val) {
 }
 
 /*
-int SerialLine::ReceivedBytesPos()
+int RecvCecBuffer::ReceivedBytesPos()
 {
 	return _receiveBufferPos;
 }
 */
 
-void SerialLine::ResetReceiveBuffer()
+void RecvCecBuffer::ResetReceiveBuffer()
 {
 	for (int i = 0; i < _receiveBufferPos; ++i) {
 		_receiveBuffer[i].reset();
@@ -105,7 +105,7 @@ void SerialLine::ResetReceiveBuffer()
 }
 
 /*
-void SerialLine::ResetTransmitBuffer()
+void RecvCecBuffer::ResetTransmitBuffer()
 {
 	_transmitBufferBit = 7;
 	_transmitBufferByte = 0;

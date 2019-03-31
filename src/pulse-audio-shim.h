@@ -13,6 +13,8 @@
 #include "cec-logical-device.h"
 #include "cec-device.h"
 
+#include "serial-line.h"
+
 #define MSG_ESC 0xfd
 #define MSG_EOM 0xfe
 #define MSG_START 0xff
@@ -22,7 +24,7 @@ typedef unsigned char Byte;
 
 class PulseBuffer {
     public: 
-        Byte buffer[64];
+        Byte buffer[32];
         Byte buflen; 
         bool escaped;
 
@@ -31,28 +33,63 @@ class PulseBuffer {
             const Byte *data = {};
             return PulseBuffer(data, 0);
         }
-        PulseBuffer(const int *buf, int len): buflen(0), escaped(false) { 
-            for(int i = 0; i < len; ++i) {
-                append(buf[i]);
+
+        int packetLen(const Byte *buf, int len) {
+            int out = 0;
+            if (len >= 1 && buf[0] != MSG_START) {
+                ++out;
             }
+            for (int i = 0; i < len; ++i) {
+                if (buf[i] == MSG_ESC) {
+                    ++out;
+                }
+                ++out;
+            }
+            if (len > 1 && buf[len - 1] != MSG_START) {
+                ++out;
+            }
+            return out;
+        }   
+
+        PulseBuffer(const int *ibuf, int len): buflen(0), escaped(false) { 
+            Byte buf[len];
+            for (int i = 0; i < len; ++i) {
+                buf[i] = ibuf[i];
+            }
+            // buffer = new byte[packetLen(buf, len)];
+            buildPacket(buf, len);
         }
         PulseBuffer(const Byte *buf, int len): buflen(0), escaped(false) { 
-            for(int i = 0; i < len; ++i) {
+            // buffer = new byte[packetLen(buf, len)];
+            buildPacket(buf, len);
+        }
+        PulseBuffer(): buflen(0), escaped(false) {
+            // buffer = new byte[64];
+         }
+        ~PulseBuffer() {
+            // delete buffer;
+        }
+
+        void buildPacket(const Byte *buf, int len) {
+            if (len >= 1 && buf[0] != MSG_START) {
+                append(MSG_START);
+            }
+            for (int i = 0; i < len; ++i) {
                 append(buf[i]);
             }
+            if (len > 0 && buf[len - 1] != MSG_EOM) {
+                append(MSG_EOM);
+            }
         }
-        PulseBuffer(): buflen(0), escaped(false) { }
 
         void reset() {
             buflen = 0;
         } 
 
         void append(unsigned int c) {
-            if (escaped) {
+            if (c == MSG_ESC) {
+                appendByte(c);
                 appendByte(c + ESC_OFFSET);
-                escaped = false;
-            } else if (c == MSG_ESC) {
-                escaped = true;
             } else {
                 appendByte(c);
             }
@@ -86,7 +123,7 @@ class PulseBuffer {
            return PulseBuffer::empty();
         }
 
-        void dump() {
+        void dump(const char *prefix) const {
             char buf[6 + (buflen * sizeof(" %02d:A"))];
             strcpy(buf, "");
             char *sep = "";
@@ -102,7 +139,7 @@ class PulseBuffer {
                     ? buffer[i] : '.');
             }
             if (buflen > 0) {
-                DEBUG_D("S[%s]\n", buf);
+                DEBUG_D("A%s[%s]\n", prefix, buf);
             }
         }
 };
@@ -146,38 +183,37 @@ static const PulseBuffer getResponseFirmwareVersion = buildResponseFirmwareVersi
 
 class PulseAudioShim {
     private:
-        PulseBuffer packet;
-        PulseBuffer message;
-        Print &output;
         RemoteDebug &debug;
-        // CEC_Device& cecDevice;
+        Print &output;
+        SendCecBuffer sendCecBuffer;
+        PulseBuffer packet;
+        CEC_Device *cecDevice;
 
     public:
 
     PulseAudioShim(RemoteDebug &debug, Print& _output/* , CEC_Device& _cecDevice */): 
         debug(debug),
-        output(_output)
+        output(_output),
+        sendCecBuffer(debug)
         /* cecDevice(_cecDevice) */ {
     }
 
-    void begin() {
-
+    void begin(CEC_Device *_cecDevice) {
+        cecDevice = _cecDevice;
     }
 
     void Handle() {
-
+        while (Serial.available()) {
+            unsigned int c = Serial.read();
+            this->addPacket(c);
+        }
     }
 
     void response(/* const char *msg, */const PulseBuffer &packet) {
         // DbgPrint(msg);
-        if (packet.buflen >= 1 && packet.buffer[0] != MSG_START) {
-            output.write(MSG_START);
-        }
+        packet.dump("<");
         for (int i = 0; i < packet.buflen; ++i) {
             output.write(packet.buffer[i]);
-        }
-        if (packet.buflen > 0 && packet.buffer[packet.buflen - 1] != MSG_EOM) {
-            output.write(MSG_EOM);
         }
     }
 
@@ -221,28 +257,32 @@ class PulseAudioShim {
         
     }
 
-    void onMessage(const PulseBuffer &message) {
-        debug.printf("onMessage:\n");
-/*
-        cecDevice.TransmitFrame(0x0, message.buffer, message.buflen);
-*/
-    }
-
-    void onPacket(PulseBuffer packet) {
+    void processHostPacket(PulseBuffer packet) {
         switch(packet.buffer[1]) {
             case MSGCODE_PING: 
                 response(/* "PING",*/packet);
                 break;
+
             case MSGCODE_TRANSMIT: 
-                message.append(packet.slice(2, -1));
+                sendCecBuffer.append(packet.buffer, 2, packet.buflen - 1, false);
                 response(/* "TRANSMIT",*/packet);
                 break;
             case MSGCODE_TRANSMIT_EOM: 
-                message.append(packet.slice(2, -1));
-                onMessage(message);
-                message.reset();
+                sendCecBuffer.append(packet.buffer, 2, packet.buflen - 1, true);
+                // DEBUG_D("SEND:TransmitFrame\n");
+                cecDevice->TransmitFrame(sendCecBuffer);
+                sendCecBuffer.reset();
                 response(/* "TRANSMIT_EOM",*/packet);
                 break;
+            case MSGCODE_TRANSMIT_IDLETIME:
+                response(/* "TRANSMIT_IDLE",*/packet);
+                break;
+            case MSGCODE_TRANSMIT_ACK_POLARITY:
+                sendCecBuffer.ack = packet.buffer[2] ? true : false;
+                // onMessage(packet.slice(2, -1));
+                response(/* "TRANSMIT_ACK_POLARITY",*/packet);
+                break;
+
             case MSGCODE_SET_CONTROLLED: 
                 response(/* "SET_CONTROLLED",*/packet);
                 break;
@@ -252,13 +292,7 @@ class PulseAudioShim {
             case MSGCODE_GET_BUILDDATE:
                 response(/* "GET_BUILDDATE",*/getBuildDate);
                 break;
-            case MSGCODE_TRANSMIT_IDLETIME:
-                response(/* "TRANSMIT_IDLE",*/packet);
-                break;
-            case MSGCODE_TRANSMIT_ACK_POLARITY:
-                onMessage(packet.slice(2, -1));
-                response(/* "TRANSMIT_ACK_POLARITY",*/packet);
-                break;
+;
             case MSGCODE_GET_ADAPTER_TYPE:
                 response(/* "GET_ADAPTER_TYPE",*/getAdapterType);
                 break;
@@ -266,10 +300,7 @@ class PulseAudioShim {
                 response(/* "GET_DEVICE_TYPE",*/getDeviceType);
                 break;
             default:
-                {
-                    char buf[16];
-                    response(/* vsprintf(buf, "%02x", packet.buffer[1]), */packet);
-                }
+                DEBUG_E("unnkown AdapterPacket:%02x\n", packet.buffer[1]);
                 break;
         }
     }
@@ -303,8 +334,8 @@ class PulseAudioShim {
 
             } else if (c == MSG_EOM) {
                 packet.append(c);
-                packet.dump();
-                // onPacket(packet);
+                packet.dump(">");
+                processHostPacket(packet);
             } else {
                 packet.append(c);
             }

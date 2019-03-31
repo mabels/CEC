@@ -1,4 +1,4 @@
-#include "CEC_Device.h"
+#include "aCEC_Device.h"
 
 #define IN_LINE 2
 #define OUT_LINE 3
@@ -24,6 +24,7 @@ class MyCEC: public CEC_Device {
     void reportVendorID()    { unsigned char frame[4] = { 0x87, 0x00, 0xF1, 0x0E }; TransmitFrame(0x00,frame,sizeof(frame)); } // report fake vendor ID
     // TODO: implement menu status query (0x8D) and report (0x8E,0x00)
     
+    /*
     void handleKey(unsigned char key) {
       switch (key) {
         case 0x00: Keyboard.press(KEY_RETURN); break;
@@ -37,6 +38,7 @@ class MyCEC: public CEC_Device {
         case 0x53: Keyboard.press(KEY_HOME); break;
       }
     }
+    */
         
     void OnReceive(int source, int dest, unsigned char* buffer, int count) {
       if (count == 0) return;
@@ -98,11 +100,14 @@ void loop()
       case 'v':
         // request vendor ID
         buffer[0] = 0x8C;
-        device.TransmitFrame(0, buffer, 1);
+        // device.TransmitFrame(0, buffer, 1);
+        Serial.print ln("Vendor:request");
         break;
       case 'p':
         // toggle promiscuous mode
-        device.Promiscuous = !(device.Promiscuous);
+        // device.Promiscuous = !(device.Promiscuous);
+        Serial.print("Promiscuous:");
+        Serial.prinln(device.Promiscuous ? "active": "passiv");
         break;
       case 'h':
         // query Hotplug pin

@@ -24,9 +24,6 @@ public:
 	void Initialize();
 
 	virtual void Handle();
-	/*
-	virtual bool TransmitFrame(int targetAddress, const unsigned char* buffer, int count);
-	*/
 
 protected:
 	// virtual bool IsISRTriggered() = 0;
